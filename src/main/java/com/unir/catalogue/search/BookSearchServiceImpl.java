@@ -43,7 +43,6 @@ public class BookSearchServiceImpl implements BookSearchService {
     @Override
     public List<BookResponse> searchVisible(String query) {
 
-        // Si no hay query: devolvemos todos los visibles (simple para entrega)
         if (query == null || query.isBlank()) {
             return ((Collection<BookSearchDocument>) repository.findAll()).stream()
                     .filter(BookSearchDocument::isVisible)
@@ -51,7 +50,6 @@ public class BookSearchServiceImpl implements BookSearchService {
                     .toList();
         }
 
-        // Unificar resultados sin duplicados (por id), manteniendo orden de inserción
         Map<Long, BookSearchDocument> unique = new LinkedHashMap<>();
 
         repository.findByVisibleTrueAndTitleContainingIgnoreCase(query)

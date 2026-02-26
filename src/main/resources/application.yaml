@@ -12,13 +12,13 @@ spring:
 
 ## Configuracion de Instancia 
 server:
-  port: 8081
+  port: ${PORT:8080}
 
 ## Configuracion del cliente de Eureka
 eureka:
   client:
     service-url:
-      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+      defaultZone: ${EUREKA_URL}
   instance:
     preferIpAddress: true
     hostname: ms-books-catalogue

@@ -1,20 +1,11 @@
-#
-# Build del proyecto (Multi-Stage)
-# --------------------------------
-#
-# Usamos una imagen de Maven para hacer build de proyecto con Java
-# Llamaremos a este sub-entorno "build"
-# Copiamos todo el contenido del repositorio
-# Ejecutamos el comando mvn clean package (Generara un archivo JAR para el despliegue)
 FROM maven:3.9.12-eclipse-temurin-25 AS build
-COPY . .
-RUN mvn clean package
+WORKDIR /app
+COPY pom.xml .
+COPY src ./src
+RUN mvn -DskipTests clean package
 
-# Usamos una imagen de Eclipse Temurin (sucesora de AdoptOpenJDK)
-# Exponemos el puerto que nuestro componente va a usar para escuchar peticiones
-# Copiamos desde "build" el JAR generado (la ruta de generacion es la misma que veriamos en local) y lo movemos y renombramos en destino como 
-# Marcamos el punto de arranque de la imagen con el comando "java -jar app.jar" que ejecutará nuestro componente.
 FROM eclipse-temurin:25-jre
-EXPOSE 8081
-COPY --from=build /target/ms-books-catalogue-0.0.1-SNAPSHOT.jar app.jar
-ENTRYPOINT ["java", "-jar", "/app.jar"]
+WORKDIR /app
+EXPOSE 8080
+COPY --from=build /app/target/ms-books-catalogue-0.0.1-SNAPSHOT.jar app.jar
+ENTRYPOINT ["java","-jar","app.jar"]
