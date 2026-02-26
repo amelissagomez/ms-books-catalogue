@@ -37,5 +37,10 @@ public class BookAdminController {
     public void delete(@PathVariable Long id) {
         bookService.delete(id);
     }
-    
+
+    @PostMapping("/reindex")
+    public ResponseEntity<String> reindex() {
+        int count = bookService.reindexAll();
+        return ResponseEntity.ok("Indexed " + count + " books in OpenSearch");
+    }
 }

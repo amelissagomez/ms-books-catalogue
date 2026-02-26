@@ -15,6 +15,6 @@ RUN mvn clean package
 # Copiamos desde "build" el JAR generado (la ruta de generacion es la misma que veriamos en local) y lo movemos y renombramos en destino como 
 # Marcamos el punto de arranque de la imagen con el comando "java -jar app.jar" que ejecutará nuestro componente.
 FROM eclipse-temurin:25-jre
-EXPOSE 8088
+EXPOSE 8081
 COPY --from=build /target/ms-books-catalogue-0.0.1-SNAPSHOT.jar app.jar
 ENTRYPOINT ["java", "-jar", "/app.jar"]

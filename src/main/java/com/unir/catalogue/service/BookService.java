@@ -26,4 +26,6 @@ public interface BookService {
     void decreaseStock(Long id, int qty);
 
 	List<BookResponse> searchVisible(String query);
+
+	int reindexAll();
 }

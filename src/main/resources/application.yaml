@@ -2,18 +2,13 @@ spring:
   application:
     name: ms-books-catalogue
   datasource:
-    url: jdbc:h2:file:./data/catalogue-db;MODE=MySQL
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PWD}
   jpa:
     show-sql: true
     hibernate:
-      ddl-auto: create-drop
-    defer-datasource-initialization: true
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
-      settings:
-        web-allow-others: true
+      ddl-auto: update
 
 ## Configuracion de Instancia 
 server:
@@ -30,10 +25,10 @@ eureka:
 
 ##OpenSearch config
 opensearch:
-  host: ${OPENSEARCH_HOST}
+  host: ${OPENSEARCH_HOST:yielding-redbud-1mp2hkcd.us-east-1.bonsaisearch.net}
   credentials:
-    user: ${OPENSEARCH_USER}
-    password: ${OPENSEARCH_PWD}
+    user: ${OPENSEARCH_USER:622723c7bb}
+    password: ${OPENSEARCH_PWD:a0dd9c53783319a4fc6b}
   logging:
     level:
       tracer: TRACE

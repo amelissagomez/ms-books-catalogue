@@ -211,6 +211,22 @@ public class BookServiceImpl implements BookService {
 		}
 	}
 
+	@Override
+	@Transactional(readOnly = true)
+	public int reindexAll() {
+		List<BookEntity> all = bookRepository.findAll();
+		int count = 0;
+		for (BookEntity book : all) {
+			try {
+				bookSearchService.index(book);
+				count++;
+			} catch (Exception e) {
+				System.err.println("Reindex failed for book id=" + book.getId() + " -> " + e.getMessage());
+			}
+		}
+		return count;
+	}
+
 	private static boolean containsIgnoreCase(String s, String q) {
 		return s != null && q != null && s.toLowerCase().contains(q.toLowerCase());
 	}
