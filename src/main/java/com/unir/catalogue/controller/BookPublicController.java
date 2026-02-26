@@ -21,14 +21,7 @@ public class BookPublicController {
     }
 
     @GetMapping("/search")
-    public List<BookResponse> search(
-            @RequestParam(required = false) String title,
-            @RequestParam(required = false) String author,
-            @RequestParam(required = false) LocalDate publishedDate,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) String isbn,
-            @RequestParam(required = false) Integer rating
-    ) {
-        return bookService.searchVisible(title, author, publishedDate, category, isbn, rating);
+    public List<BookResponse> search(@RequestParam(required = false) String query) {
+        return bookService.searchVisible(query);
     }
 }

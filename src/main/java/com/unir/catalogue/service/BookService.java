@@ -15,22 +15,15 @@ public interface BookService {
 
     BookResponse getById(Long id);
 
-    BookResponse patch(Long id, UpdateBookRequest req);
+    BookResponse update(Long id, UpdateBookRequest req);
 
     void delete(Long id);
 
     BookResponse getVisibleById(Long id);
 
-    List<BookResponse> searchVisible(
-            String title,
-            String author,
-            LocalDate publishedDate,
-            String category,
-            String isbn,
-            Integer rating
-    );
-
     BookValidationResponse validateForPurchase(Long id);
 
     void decreaseStock(Long id, int qty);
+
+	List<BookResponse> searchVisible(String query);
 }

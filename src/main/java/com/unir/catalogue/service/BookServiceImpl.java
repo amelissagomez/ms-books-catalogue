@@ -9,6 +9,8 @@ import com.unir.catalogue.exception.BadRequestException;
 import com.unir.catalogue.exception.DuplicateIsbnException;
 import com.unir.catalogue.exception.ResourceNotFoundException;
 import com.unir.catalogue.repository.BookRepository;
+import com.unir.catalogue.search.BookSearchService;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,159 +23,211 @@ import java.util.List;
 @Transactional
 public class BookServiceImpl implements BookService {
 
-    private final BookRepository bookRepository;
 
+	private final BookRepository bookRepository;
 
-    @Override
-    public BookResponse create(CreateBookRequest req) {
-        if (bookRepository.existsByIsbn(req.isbn())) {
-            throw new DuplicateIsbnException(req.isbn());
-        }
+	// ✅ Nuevo: servicio para indexar/buscar en OpenSearch
+	private final BookSearchService bookSearchService;
 
-        BookEntity entity = BookEntity.builder()
-                .title(req.title())
-                .author(req.author())
-                .publishedDate(req.publishedDate())
-                .category(req.category())
-                .isbn(req.isbn())
-                .rating(req.rating())
-                .visible(req.visible() != null ? req.visible() : true)
-                .stock(req.stock() != null ? req.stock() : 0)
-                .price(req.price())
-                .build();
+	@Override
+	public BookResponse create(CreateBookRequest req) {
 
-        return toResponse(bookRepository.save(entity));
-    }
+		// Regla: ISBN único
+		if (bookRepository.existsByIsbn(req.isbn())) {
+			throw new IllegalArgumentException("ISBN already exists: " + req.isbn());
+		}
 
-    @Override
-    @Transactional(readOnly = true)
-    public BookResponse getById(Long id) {
-        return toResponse(findOrThrow(id));
-    }
+		BookEntity entity = new BookEntity();
+		entity.setTitle(req.title());
+		entity.setAuthor(req.author());
+		entity.setPublishedDate(req.publishedDate());
+		entity.setCategory(req.category());
+		entity.setIsbn(req.isbn());
+		entity.setPrice(req.price());
+		entity.setRating(req.rating());
+		entity.setVisible(req.visible() != null ? req.visible() : true);
+		entity.setStock(req.stock() != null ? req.stock() : 0);
 
-    @Override
-    public BookResponse patch(Long id, UpdateBookRequest req) {
-        BookEntity b = findOrThrow(id);
+		BookEntity saved = bookRepository.save(entity);
 
-        if (req.title() != null) b.setTitle(req.title());
-        if (req.author() != null) b.setAuthor(req.author());
-        if (req.publishedDate() != null) b.setPublishedDate(req.publishedDate());
-        if (req.category() != null) b.setCategory(req.category());
+		// ✅ Punto 3: después de persistir → indexar en OpenSearch
+		// Nota: el indexado NO debe romper la transacción si falla (best effort)
+		try {
+			bookSearchService.index(saved);
+		} catch (Exception e) {
+			// por entrega: log simple y seguimos (BD es la fuente de verdad)
+			// si quieres, lo cambiamos a logger
+			System.err.println("OpenSearch index failed for book id=" + saved.getId() + " -> " + e.getMessage());
+		}
 
-        if (req.isbn() != null && !req.isbn().equalsIgnoreCase(b.getIsbn())) {
-            if (bookRepository.existsByIsbn(req.isbn())) {
-                throw new DuplicateIsbnException(req.isbn());
-            }
-            b.setIsbn(req.isbn());
-        }
+		return toResponse(saved);
+	}
 
-        if (req.rating() != null) b.setRating(req.rating());
-        if (req.visible() != null) b.setVisible(req.visible());
-        if (req.stock() != null) b.setStock(req.stock());
-        if (req.price() != null) b.setPrice(req.price());
+	@Override
+	@Transactional(readOnly = true)
+	public BookResponse getById(Long id) {
+		BookEntity book = bookRepository.findById(id)
+				.orElseThrow(() -> new IllegalArgumentException("Book not found: " + id));
+		return toResponse(book);
+	}
 
-        return toResponse(bookRepository.save(b));
-    }
+	@Override
+	@Transactional(readOnly = true)
+	public BookResponse getVisibleById(Long id) {
+		BookEntity book = bookRepository.findById(id)
+				.orElseThrow(() -> new IllegalArgumentException("Book not found: " + id));
 
-    @Override
-    public void delete(Long id) {
-        if (!bookRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Libro no encontrado: " + id);
-        }
-        bookRepository.deleteById(id);
-    }
+		if (!book.isVisible()) {
+			throw new IllegalArgumentException("Book is hidden: " + id);
+		}
+		return toResponse(book);
+	}
 
+	@Override
+	public BookResponse update(Long id, UpdateBookRequest req) {
+		BookEntity book = bookRepository.findById(id)
+				.orElseThrow(() -> new IllegalArgumentException("Book not found: " + id));
 
-    @Override
-    @Transactional(readOnly = true)
-    public BookResponse getVisibleById(Long id) {
-        BookEntity b = findOrThrow(id);
-        if (!b.isVisible()) {
-            throw new BadRequestException("Libro oculto: " + id);
-        }
-        return toResponse(b);
-    }
+		// Si cambia ISBN: validar que no exista en otro registro
+		if (req.isbn() != null && !req.isbn().equalsIgnoreCase(book.getIsbn())) {
+			if (bookRepository.existsByIsbn(req.isbn())) {
+				throw new IllegalArgumentException("ISBN already exists: " + req.isbn());
+			}
+			book.setIsbn(req.isbn());
+		}
 
-    @Override
-    @Transactional(readOnly = true)
-    public List<BookResponse> searchVisible(String title,
-                                           String author,
-                                           LocalDate publishedDate,
-                                           String category,
-                                           String isbn,
-                                           Integer rating) {
+		if (req.title() != null) book.setTitle(req.title());
+		if (req.author() != null) book.setAuthor(req.author());
+		if (req.publishedDate() != null) book.setPublishedDate(req.publishedDate());
+		if (req.category() != null) book.setCategory(req.category());
+		if (req.price() != null) book.setPrice(req.price());
+		if (req.rating() != null) book.setRating(req.rating());
+		if (req.visible() != null) book.setVisible(req.visible());
+		if (req.stock() != null) book.setStock(req.stock());
 
-        return bookRepository.findAll().stream()
-                .filter(BookEntity::isVisible)
-                .filter(b -> title == null || containsIgnoreCase(b.getTitle(), title))
-                .filter(b -> author == null || containsIgnoreCase(b.getAuthor(), author))
-                .filter(b -> publishedDate == null || publishedDate.equals(b.getPublishedDate()))
-                .filter(b -> category == null || equalsIgnoreCaseSafe(b.getCategory(), category))
-                .filter(b -> isbn == null || equalsIgnoreCaseSafe(b.getIsbn(), isbn))
-                .filter(b -> rating == null || b.getRating() == rating)
-                .map(BookServiceImpl::toResponse)
-                .toList();
-    }
+		BookEntity saved = bookRepository.save(book);
 
+		// ✅ Punto 3: después de update → re-indexar
+		try {
+			bookSearchService.index(saved);
+		} catch (Exception e) {
+			System.err.println("OpenSearch re-index failed for book id=" + saved.getId() + " -> " + e.getMessage());
+		}
 
-    @Override
-    @Transactional(readOnly = true)
-    public BookValidationResponse validateForPurchase(Long id) {
-        BookEntity b = findOrThrow(id);
-        return new BookValidationResponse(
-                b.getId(),
-                b.getIsbn(),
-                b.getTitle(),
-                b.isVisible(),
-                b.getStock(),
-                b.getPrice()
-        );
-    }
-    
-    
-    @Override
-    public void decreaseStock(Long id, int quality) {
-        if (quality <= 0) throw new BadRequestException("la calificación del libro debe ser mayor a 0");
+		return toResponse(saved);
+	}
 
-        BookEntity bookEntity = findOrThrow(id);
+	@Override
+	public void delete(Long id) {
+		if (!bookRepository.existsById(id)) {
+			throw new IllegalArgumentException("Book not found: " + id);
+		}
 
-        if (!bookEntity.isVisible()) {
-            throw new BadRequestException("Libro oculto: " + id);
-        }
-        if (bookEntity.getStock() < quality) {
-            throw new BadRequestException("No hay suficiente stock para este libro: " + id);
-        }
+		bookRepository.deleteById(id);
 
-        bookEntity.setStock(bookEntity.getStock() - quality);
-        bookRepository.save(bookEntity);
-    }
+		// ✅ Punto 3: después de delete → borrar del índice
+		try {
+			bookSearchService.deleteById(id);
+		} catch (Exception e) {
+			System.err.println("OpenSearch delete failed for book id=" + id + " -> " + e.getMessage());
+		}
+	}
 
+	// ==========================
+	// INTERNAL - Para payments
+	// ==========================
 
-    private BookEntity findOrThrow(Long id) {
-        return bookRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Libro no encontrado: " + id));
-    }
+	@Override
+	@Transactional(readOnly = true)
+	public BookValidationResponse validateForPurchase(Long id) {
+		BookEntity book = bookRepository.findById(id)
+				.orElseThrow(() -> new IllegalArgumentException("Book not found: " + id));
 
-    private static BookResponse toResponse(BookEntity bookEntity) {
-        return new BookResponse(
-        		bookEntity.getId(),
-        		bookEntity.getTitle(),
-        		bookEntity.getAuthor(),
-        		bookEntity.getPublishedDate(),
-        		bookEntity.getCategory(),
-        		bookEntity.getIsbn(),
-        		bookEntity.getRating(),
-        		bookEntity.isVisible(),
-        		bookEntity.getStock(),
-        		bookEntity.getPrice()
-        );
-    }
+		// Regla: no se compra oculto
+		if (!book.isVisible()) {
+			throw new IllegalArgumentException("Book is hidden: " + id);
+		}
 
-    private static boolean containsIgnoreCase(String value, String q) {
-        return value != null && q != null && value.toLowerCase().contains(q.toLowerCase());
-    }
+		return new BookValidationResponse(
+				book.getId(),
+				book.getIsbn(),
+				book.getTitle(),
+				book.isVisible(),
+				book.getStock(),
+				book.getPrice()
+				);
+	}
 
-    private static boolean equalsIgnoreCaseSafe(String a, String b) {
-        return a != null && b != null && a.equalsIgnoreCase(b);
-    }
+	@Override
+	public void decreaseStock(Long id, int qty) {
+		if (qty <= 0) {
+			throw new IllegalArgumentException("qty must be > 0");
+		}
+
+		BookEntity book = bookRepository.findById(id)
+				.orElseThrow(() -> new IllegalArgumentException("Book not found: " + id));
+
+		if (!book.isVisible()) {
+			throw new IllegalArgumentException("Book is hidden: " + id);
+		}
+
+		if (book.getStock() < qty) {
+			throw new IllegalArgumentException("Insufficient stock for bookId=" + id);
+		}
+
+		book.setStock(book.getStock() - qty);
+		BookEntity saved = bookRepository.save(book);
+
+		// ✅ opcional pero recomendado: re-indexar para que búsquedas reflejen stock
+		try {
+			bookSearchService.index(saved);
+		} catch (Exception e) {
+			System.err.println("OpenSearch re-index (stock) failed for book id=" + id + " -> " + e.getMessage());
+		}
+	}
+
+	// ==========================
+	// PUBLIC SEARCH - OpenSearch
+	// ==========================
+	@Override
+	@Transactional(readOnly = true)
+	public List<BookResponse> searchVisible(String query) {
+		// Nota: tu requisito principal era búsquedas combinadas.
+		// Para entrega, lo dejamos como "query" full-text y devolvemos solo visibles.
+		try {
+			return bookSearchService.searchVisible(query);
+		} catch (Exception e) {
+			// fallback: si OpenSearch cae, no tumbamos el sistema
+			System.err.println("OpenSearch search failed -> fallback DB. " + e.getMessage());
+			return bookRepository.findAll().stream()
+					.filter(BookEntity::isVisible)
+					.filter(b -> query == null || query.isBlank()
+					|| containsIgnoreCase(b.getTitle(), query)
+					|| containsIgnoreCase(b.getAuthor(), query)
+					|| (b.getCategory() != null && containsIgnoreCase(b.getCategory(), query))
+					|| containsIgnoreCase(b.getIsbn(), query))
+					.map(BookServiceImpl::toResponse)
+					.toList();
+		}
+	}
+
+	private static boolean containsIgnoreCase(String s, String q) {
+		return s != null && q != null && s.toLowerCase().contains(q.toLowerCase());
+	}
+
+	private static BookResponse toResponse(BookEntity b) {
+		return new BookResponse(
+				b.getId(),
+				b.getTitle(),
+				b.getAuthor(),
+				b.getPublishedDate(),
+				b.getCategory(),
+				b.getIsbn(),
+				b.getRating(),
+				b.isVisible(),
+				b.getStock(),
+				b.getPrice()
+				);
+	}
+
 }

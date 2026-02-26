@@ -27,9 +27,9 @@ public class BookAdminController {
         return ResponseEntity.ok(bookService.getById(id));
     }
 
-    @PatchMapping("/{id}")
+    @PutMapping("/{id}")
     public ResponseEntity<BookResponse> patch(@PathVariable Long id, @Valid @RequestBody UpdateBookRequest req) {
-        return ResponseEntity.ok(bookService.patch(id, req));
+        return ResponseEntity.ok(bookService.update(id, req));
     }
 
     @DeleteMapping("/{id}")

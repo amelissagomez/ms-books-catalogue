@@ -27,3 +27,13 @@ eureka:
   instance:
     preferIpAddress: true
     hostname: ms-books-catalogue
+
+##OpenSearch config
+opensearch:
+  host: ${OPENSEARCH_HOST}
+  credentials:
+    user: ${OPENSEARCH_USER}
+    password: ${OPENSEARCH_PWD}
+  logging:
+    level:
+      tracer: TRACE

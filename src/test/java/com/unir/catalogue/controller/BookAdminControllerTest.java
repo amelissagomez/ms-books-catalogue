@@ -126,7 +126,7 @@ class BookAdminControllerTest {
                 new BigDecimal("135000.00")
         );
 
-        when(bookService.patch(eq(1L), any(UpdateBookRequest.class))).thenReturn(resp);
+        when(bookService.update(eq(1L), any(UpdateBookRequest.class))).thenReturn(resp);
 
         ResponseEntity<BookResponse> result = controller.patch(1L, req);
 
@@ -135,7 +135,7 @@ class BookAdminControllerTest {
         assertEquals(5, result.getBody().stock());
         assertEquals(new BigDecimal("135000.00"), result.getBody().price());
 
-        verify(bookService).patch(eq(1L), any(UpdateBookRequest.class));
+        verify(bookService).update(eq(1L), any(UpdateBookRequest.class));
     }
 
     @Test

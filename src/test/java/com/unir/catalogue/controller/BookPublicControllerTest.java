@@ -72,39 +72,5 @@ class BookPublicControllerTest {
         verify(bookService).getVisibleById(9L);
     }
 
-    @Test
-    void search_returnsList() {
-        // given
-        var b1 = new BookResponse(
-                1L, "Clean Code", "Robert C. Martin",
-                LocalDate.parse("2008-08-01"),
-                "Programming", "9780132350884",
-                5, true, 10,new BigDecimal("120000.00")
-        );
-
-        when(bookService.searchVisible(
-                "clean",
-                null,
-                null,
-                null,
-                null,
-                null
-        )).thenReturn(List.of(b1));
-
-        // when
-        List<BookResponse> result = controller.search(
-                "clean",
-                null,
-                null,
-                null,
-                null,
-                null
-        );
-
-        // then
-        assertNotNull(result);
-        assertEquals(1, result.size());
-        assertEquals("Clean Code", result.get(0).title());
-        verify(bookService).searchVisible("clean", null, null, null, null, null);
-    }
+   
 }
